@@ -1,0 +1,22 @@
+server:
+  port: 8585
+
+spring:
+  application:
+    name: spring_ai_demo
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/general_demo
+    username: stef
+    password: ${DB_PASS}
+
+  ai:
+    openai:
+      api-key: ${OPEN_API_KEY}
+      chat:
+        model: gpt-5.6-luna
+        #model: gpt-5.6-terra
+        options:
+          reasoning-effort: none
+      embedding:
+        model: text-embedding-3-small
