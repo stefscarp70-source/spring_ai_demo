@@ -6,11 +6,15 @@ spring:
     name: spring_ai_demo
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/general_demo
+    #url: jdbc:postgresql://localhost:5432/general_demo
+    url: jdbc:postgresql://localhost:5433/spring_ai_demo
     username: stef
     password: ${DB_PASS}
 
   ai:
+    vectorstore:
+      pgvector:
+        initialize-schema: true
     openai:
       api-key: ${OPEN_API_KEY}
       chat:
@@ -20,3 +24,13 @@ spring:
           reasoning-effort: none
       embedding:
         model: text-embedding-3-small
+
+logging:
+  level:
+    root: WARN
+    com.example.spring_ai_demo.controller: INFO
+    com.example.spring_ai_demo.service: DEBUG
+    com.example.spring_ai_demo.tools: DEBUG
+
+  pattern:
+    console: "%-5level| %-90msg | %class{15} %d{yyyy-MM-dd'T'HH:mm:ss.SSSZ}%n"

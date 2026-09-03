@@ -2,22 +2,27 @@ package com.example.spring_ai_demo.tool;
 
 import com.example.spring_ai_demo.StarWarsCharacterRepository;
 import com.example.spring_ai_demo.model.StarWarsCharacter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.SimpleVectorStore;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+@Slf4j
 @Component
 public class StarWarsTools {
 
     private final StarWarsCharacterRepository repository;
-    private final SimpleVectorStore vectorStore;
+    private final VectorStore vectorStore;
     private final ToolExecutionTracker tracker;
 
-    public StarWarsTools(StarWarsCharacterRepository repository, SimpleVectorStore vectorStore, ToolExecutionTracker tracker) {
+    public StarWarsTools(StarWarsCharacterRepository repository, VectorStore vectorStore, ToolExecutionTracker tracker) {
         this.repository = repository;
         this.vectorStore = vectorStore;
         this.tracker = tracker;
@@ -32,29 +37,40 @@ public class StarWarsTools {
             """)
     public List<StarWarsCharacter>  findCharByHomeworld(String homeworld) {
         tracker.record("findCharByHomeworld");
-        System.out.println(">>> TOOL CHIAMATO: findCharactersByHomeworld(" + homeworld + ")");
+        log.info("  TOOL CHIAMATO: findCharactersByHomeworld( {} )", homeworld);
         List<StarWarsCharacter>result =  repository.findByHomeworld(homeworld);
-        System.out.println(">>> RISULTATI: " + result.size());
+        log.info("    RISULTATI: {}", result.size());
 
         return result;
     }
 
     @Tool(description = """
-        Esegue una ricerca semantica sui personaggi di Star Wars.
-        Utilizza questo strumento quando la domanda richiede
-        informazioni semanticamente correlate ai personaggi
-        e non una condizione strutturata esatta.
+            Cerca personaggi Star Wars usando una ricerca semantica.
+            Può opzionalmente filtrare i risultati per pianeta natale e/o per specie.
         """)
-    public List<String> searchCharacters(String query) {
+    public List<String> searchCharacters(String query, String homeworld, String species) {
         tracker.record("searchCharacters LLM");
+        log.info("   Tool searchCharacters con arg: ");
+        log.info("       - {}", query);
+        log.info("       - home: {}", homeworld);
+        log.info("       - spec: {}", species);
 
-        List<Document> documents = vectorStore.similaritySearch(
-                SearchRequest.builder()
-                        .query(query)
-                        .topK(5)
-                        .build()
-        );
+        SearchRequest.Builder builder = SearchRequest.builder()
+                .query(query)
+                .topK(5);
 
+        List<String> filters = new ArrayList<>();
+        if (homeworld != null && !homeworld.isBlank()) {
+            filters.add("homeworld == '"+homeworld+"'");
+        }
+        if (species != null && !species.isBlank()) {
+            filters.add("species == '" + species + "'");
+        }
+        if (!filters.isEmpty()) {
+            builder.filterExpression(String.join(" && ", filters));
+        }
+
+        List<Document> documents = vectorStore.similaritySearch(builder.build());
         return documents.stream()
                 .map(Document::getText)
                 .toList();

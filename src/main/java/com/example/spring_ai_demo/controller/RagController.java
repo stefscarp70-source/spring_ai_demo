@@ -12,7 +12,7 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.SimpleVectorStore;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,13 +25,13 @@ import java.util.stream.Collectors;
 @RestController
 public class RagController {
 
-    private final SimpleVectorStore vectorStore;
+    private final VectorStore vectorStore;
     private final ChatClient chat;
     private final StarWarsTools tools;
     private final OpenAiChatModel openAiChatModel;
     private final ToolExecutionTracker tracker;
 
-    public RagController(SimpleVectorStore vectorStore, ChatClient chat, StarWarsTools tools, OpenAiChatModel openAiChatModel, ToolExecutionTracker tracker) {
+    public RagController(VectorStore vectorStore, ChatClient chat, StarWarsTools tools, OpenAiChatModel openAiChatModel, ToolExecutionTracker tracker) {
         this.vectorStore = vectorStore;
         this.chat = chat;
         this.tools = tools;
@@ -40,11 +40,7 @@ public class RagController {
     }
 
     @GetMapping("/api/rag")
-    public ChatResponseDto rag(@RequestParam String question, @RequestParam Integer docs) {
-        int numPK = 5;
-        if (docs!=null && docs>0) {
-            numPK = docs;
-        }
+    public ChatResponseDto rag(@RequestParam String question) {
 
         OpenAiChatOptions options = openAiChatModel.getOptions();
 
@@ -52,57 +48,11 @@ public class RagController {
         System.out.println(">>> REASONING EFFORT: " + options.getReasoningEffort());
         System.out.println(">>> TOOL CHOICE: " + options.getToolChoice());
 
-        ToolCallback[] stools = ToolCallbacks.from(tools);
-
-        for (ToolCallback tool : stools) {
-            System.out.println(
-                    ">>> TOOL REGISTRATO: "
-                            + tool.getToolDefinition().name());
-        }
-
-        /*
-        List<Document> documents = vectorStore.similaritySearch(
-                SearchRequest.builder()
-                        .query(question)
-                        .topK(numPK)
-                        .build()
-        );
-
-        if (docs!=null && docs>0) {
-            documents.forEach(
-                    d -> System.out.println( compactDocument(d))
-            );
-            System.out.println( "-------------------");
-        }
-
-
-        String context = documents.stream()
-                .map(Document::getText)
-                .reduce("", (a, b) -> a + "\n\n" + b);
-
-         */
-
-
         ChatResponse response = chat
                 .prompt()
-//                .user("""
-//                        Rispondi alla domanda utilizzando le informazioni presenti nel CONTEXT
-//                        ma anche considerando se usare il tool
-//
-//                        Se la risposta non è presente nel CONTEXT,
-//                        dichiara esplicitamente di non avere
-//                        informazioni sufficienti.
-//
-//                        CONTEXT:
-//                        %s
-//
-//                        DOMANDA:
-//                        %s
-//                        """.formatted(context, question))
                 .user(question)
                 .tools(tools)
                 .options(OpenAiChatOptions.builder()
-                        //.toolChoice("required")
                         .reasoningEffort("none")
                         )
                 .call()
@@ -120,6 +70,58 @@ public class RagController {
                 usage.getTotalTokens()
         );
     }
+
+    @GetMapping("/api/rag2")
+    public ChatResponseDto rag2(@RequestParam String question, @RequestParam Integer docs) {
+
+        OpenAiChatOptions options = openAiChatModel.getOptions();
+
+        List<Document> documents = vectorStore.similaritySearch(
+                SearchRequest.builder()
+                        .query(question)
+                        .topK(docs)
+                        .filterExpression("homeworld == 'Tatooine'")
+                        .build()
+        );
+        String context = documents.stream()
+                .map(Document::getText)
+                .collect(Collectors.joining("\n\n"));
+        String prompt = """
+            Rispondi alla domanda utilizzando esclusivamente le informazioni
+            presenti nel CONTEXT.
+    
+            Se il CONTEXT non contiene informazioni sufficienti per rispondere,
+            dichiara che non hai informazioni sufficienti.
+    
+            CONTEXT:
+            %s
+    
+            DOMANDA:
+            %s
+        """.formatted(context, question);
+
+        ChatResponse response = chat
+                .prompt()
+                .user(prompt)
+                .options(OpenAiChatOptions.builder()
+                        .reasoningEffort("none")
+                )
+                .call()
+                .chatResponse();
+
+        System.out.println( "-------------------");
+        Usage usage = response.getMetadata().getUsage();
+
+        return new ChatResponseDto(
+                response.getResult().getOutput().getText(),
+                response.getMetadata().getModel(),
+                tracker.getTools(),
+                usage.getPromptTokens(),
+                usage.getCompletionTokens(),
+                usage.getTotalTokens()
+        );
+    }
+
 
     private String compactDocument(Document document) {
         String text = document.getText();
