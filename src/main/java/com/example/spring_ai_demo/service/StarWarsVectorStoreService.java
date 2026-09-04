@@ -83,6 +83,9 @@ public class StarWarsVectorStoreService {
     private Map prepareMetadata(StarWarsCharacter character) {
         Map<String, Object> metadata = new HashMap<>();
 
+        if (character.name() != null) {
+            metadata.put("name", character.name());
+        }
         if (character.homeworld() != null) {
             metadata.put("homeworld", character.homeworld());
         }

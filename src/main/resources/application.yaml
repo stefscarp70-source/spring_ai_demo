@@ -30,7 +30,7 @@ logging:
     root: WARN
     com.example.spring_ai_demo.controller: INFO
     com.example.spring_ai_demo.service: DEBUG
-    com.example.spring_ai_demo.tools: DEBUG
+    com.example.spring_ai_demo.tool: DEBUG
 
   pattern:
     console: "%-5level| %-90msg | %class{15} %d{yyyy-MM-dd'T'HH:mm:ss.SSSZ}%n"

@@ -10,9 +10,7 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Slf4j
 @Component
@@ -21,11 +19,13 @@ public class StarWarsTools {
     private final StarWarsCharacterRepository repository;
     private final VectorStore vectorStore;
     private final ToolExecutionTracker tracker;
+    private final StarWarsReranker reranker;
 
-    public StarWarsTools(StarWarsCharacterRepository repository, VectorStore vectorStore, ToolExecutionTracker tracker) {
+    public StarWarsTools(StarWarsCharacterRepository repository, VectorStore vectorStore, ToolExecutionTracker tracker, StarWarsReranker reranker) {
         this.repository = repository;
         this.vectorStore = vectorStore;
         this.tracker = tracker;
+        this.reranker = reranker;
     }
 
     @Tool(description= """
@@ -43,6 +43,8 @@ public class StarWarsTools {
 
         return result;
     }
+
+    public static final double DOC_THRESHOLD = 0.20;
 
     @Tool(description = """
             Cerca personaggi Star Wars usando una ricerca semantica.
@@ -71,7 +73,25 @@ public class StarWarsTools {
         }
 
         List<Document> documents = vectorStore.similaritySearch(builder.build());
-        return documents.stream()
+        List<Document> filteredDocuments = documents.stream()
+                .filter(document -> document.getScore() != null && document.getScore() >= DOC_THRESHOLD)
+                .toList();
+        filteredDocuments.forEach(document ->
+                log.debug("  >> ACCEPTED score: {} | {}", document.getScore(), document.getMetadata().get("name"))
+        );
+        log.debug("  --------------------");
+        documents.stream()
+                .filter(doc -> doc.getScore()<DOC_THRESHOLD)
+                .peek(document -> log.debug("  >> score: {} | {}", document.getScore(), document.getMetadata().get("name"))
+        );
+
+        log.debug("  ....................");
+        List<Document> rerankedDocs = reranker.rerank(query, filteredDocuments);
+        rerankedDocs.forEach(document ->
+                log.debug("  >> Reranked score: {} | {}", document.getScore(), document.getMetadata().get("name"))
+        );
+
+        return rerankedDocs.stream()
                 .map(Document::getText)
                 .toList();
     }
