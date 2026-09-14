@@ -25,6 +25,8 @@ spring:
           reasoning-effort: none
       embedding:
         model: text-embedding-3-small
+tavily:
+  api-key: ${TAV_KEY}
 
 logging:
   level:

@@ -9,31 +9,30 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.support.ToolCallbacks;
-import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.context.properties.bind.Name;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
 public class RagController {
 
     private final VectorStore vectorStore;
-    private final ChatClient chat;
+    private final ChatClient chatClient;
     private final StarWarsTools tools;
     private final OpenAiChatModel openAiChatModel;
     private final ToolExecutionTracker tracker;
 
-    public RagController(VectorStore vectorStore, ChatClient chat, StarWarsTools tools, OpenAiChatModel openAiChatModel, ToolExecutionTracker tracker) {
+    public RagController(VectorStore vectorStore, ChatClient chatClient, StarWarsTools tools, OpenAiChatModel openAiChatModel, ToolExecutionTracker tracker) {
         this.vectorStore = vectorStore;
-        this.chat = chat;
+        this.chatClient = chatClient;
         this.tools = tools;
         this.openAiChatModel = openAiChatModel;
         this.tracker = tracker;
@@ -48,7 +47,7 @@ public class RagController {
         System.out.println(">>> REASONING EFFORT: " + options.getReasoningEffort());
         System.out.println(">>> TOOL CHOICE: " + options.getToolChoice());
 
-        ChatResponse response = chat
+        ChatResponse response = chatClient
                 .prompt()
                 .user(question)
                 .tools(tools)
@@ -100,7 +99,7 @@ public class RagController {
             %s
         """.formatted(context, question);
 
-        ChatResponse response = chat
+        ChatResponse response = chatClient
                 .prompt()
                 .user(prompt)
                 .options(OpenAiChatOptions.builder()
