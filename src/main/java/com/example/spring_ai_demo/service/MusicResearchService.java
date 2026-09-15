@@ -1,5 +1,8 @@
 package com.example.spring_ai_demo.service;
 
+import com.example.spring_ai_demo.tool.songs.dto.AlbumDetails;
+import com.example.spring_ai_demo.tool.songs.dto.TavilyAdvResult;
+import com.example.spring_ai_demo.tool.songs.dto.TavilySearchAdvResponse;
 import com.example.spring_ai_demo.tool.songs.dto.UpcomingAlbum;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -9,6 +12,9 @@ import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.converter.StructuredOutputConverter;
 import org.springframework.stereotype.Service;
 
+import java.util.Objects;
+import java.util.stream.Collectors;
+
 @Slf4j
 @Service
 public class MusicResearchService {
@@ -17,11 +23,13 @@ public class MusicResearchService {
     private final WebsearchService websearchService;
 
     private final StructuredOutputConverter<UpcomingAlbum> converter;
+    private final StructuredOutputConverter<AlbumDetails> detConverter;
 
     public MusicResearchService(ChatClient researchChatClient, WebsearchService websearchService) {
         this.researchChatClient = researchChatClient;
         this.websearchService = websearchService;
         converter = new BeanOutputConverter<>(UpcomingAlbum.class);
+        detConverter = new BeanOutputConverter<>(AlbumDetails.class);
     }
 
     public UpcomingAlbum webSearch(String artist, int monthBefore, int monthsAhead) {
@@ -80,6 +88,62 @@ public class MusicResearchService {
                     .getText());
 
             return album;
+        }
+    }
+    public AlbumDetails detailsSearch(String artist, String albumTitle) {
+        TavilySearchAdvResponse tavResponse = websearchService.getAlbumDetails(artist, albumTitle);
+        String researchContext = """
+            Tavily search answer:
+            %s
+        
+            Raw web content from the search results:
+            %s
+            """.formatted(
+                    tavResponse.answer(),
+                    tavResponse.results().stream()
+                            .limit(2)
+                            .map(TavilyAdvResult::raw_content)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.joining("\n\n--- SOURCE ---\n\n"))
+        );
+
+        log.info("    tav answer: {}", tavResponse.answer());
+
+        ChatResponse response = researchChatClient
+                .prompt()
+                .user("""
+                      The web research below in web_result may contain a large amount of
+                      irrelevant information.
+                      Your task is to identify the complete track list of the album %s.
+
+                      Extract ONLY information that is actually present in the web research.
+                      Do not invent or infer missing tracks.
+
+                      The tracklist may appear inside raw web content and may be surrounded by unrelated text.
+                        Use field "track_list" to put the track list, but MUST be an array of strings.
+                        Each track title must be a separate element of the array.                        
+                        Do NOT return Markdown. Do NOT number the tracks.
+                        Do NOT return headings or explanatory text.
+                      Put in output also 
+                      - artist
+                      - album_title  
+                      web_result: %s
+                      """.formatted(albumTitle, researchContext))
+                .call()
+                .chatResponse();
+
+        String rawResponse = response.getResult().getOutput().getText();
+        log.info("    RAW answer: {}", rawResponse);
+        Usage usage = response.getMetadata().getUsage();
+        log.info("    Prompt tokens: {}", usage.getPromptTokens());
+        log.info("    Completion tokens: {}", usage.getCompletionTokens());
+        log.info("    Total tokens: {}", usage.getTotalTokens());
+
+        try {
+            return detConverter.convert(rawResponse);
+        } catch (Exception e) {
+            log.warn("Unable to parse album details response: {}", rawResponse, e);
+            return AlbumDetails.empty(artist, albumTitle);
         }
     }
 
