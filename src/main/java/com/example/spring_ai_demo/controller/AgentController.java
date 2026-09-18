@@ -9,9 +9,9 @@ import com.example.spring_ai_demo.tool.songs.dto.RunResult;
 import com.example.spring_ai_demo.tool.songs.dto.TavilySearchResponse;
 import com.example.spring_ai_demo.tool.songs.dto.UpcomingAlbum;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @Slf4j
@@ -56,7 +56,15 @@ public class AgentController {
     @GetMapping("/agent/run")
     public RunResult agentRun(@RequestParam String artist) {
 
-        return agentService.run(artist);
+        return agentService.runOllama(artist);
+
+    }
+
+    @GetMapping("/agent/test")
+    public RunResult agentTest() {
+
+        agentService.testOllamaToolCalling2();
+        return RunResult.budgetExceeded(2, 0);
 
     }
 

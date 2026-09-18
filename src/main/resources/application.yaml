@@ -8,6 +8,8 @@ spring:
   autoconfigure:
     exclude:
       - org.springframework.ai.autoconfigure.vectorstore.pgvector.PgVectorStoreAutoConfiguration
+      - org.springframework.ai.model.chat.client.autoconfigure.ChatClientAutoConfiguration
+      - org.springframework.ai.model.ollama.autoconfigure.OllamaEmbeddingAutoConfiguration
 
 
   datasource:
@@ -29,6 +31,10 @@ spring:
           reasoning-effort: none
       embedding:
         model: text-embedding-3-small
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        model: llama3.1:8b-instruct-q4_K_M
 tavily:
   api-key: ${TAV_KEY}
 
@@ -36,7 +42,7 @@ logging:
   level:
     root: WARN
     com.example.spring_ai_demo.controller: INFO
-    com.example.spring_ai_demo.service: DEBUG
+    com.example.spring_ai_demo.service: INFO
     com.example.spring_ai_demo.tool: DEBUG
 
   pattern:

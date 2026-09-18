@@ -17,10 +17,12 @@ import java.util.List;
 public class ChatController {
 
     private final ChatClient chatClient;
+    private final ChatClient ollamaClient;
     private final StarWarsCharacterRepository repository;
 
-    public ChatController(ChatClient.Builder builder, StarWarsCharacterRepository repository) {
-        this.chatClient = builder.build();
+    public ChatController(ChatClient chatClient, ChatClient ollamaChatClient, StarWarsCharacterRepository repository) {
+        this.chatClient = chatClient;
+        this.ollamaClient = ollamaChatClient;
         this.repository = repository;
     }
 
@@ -30,10 +32,30 @@ public class ChatController {
     }
 
     @GetMapping("/api/chat")
-    public ChatResponseDto chat(@RequestParam String message) {
+    public ChatResponseDto chat(@RequestParam String question) {
         ChatResponse response =  chatClient
                 .prompt()
-                .user(message)
+                .user(question)
+                .call()
+                .chatResponse();
+
+        Usage usage = response.getMetadata().getUsage();
+
+        return new ChatResponseDto(
+                response.getResult().getOutput().getText(),
+                response.getMetadata().getModel(),
+                Collections.emptyList(),
+                usage.getPromptTokens(),
+                usage.getCompletionTokens(),
+                usage.getTotalTokens()
+        );
+    }
+
+    @GetMapping("/api/ollama")
+    public ChatResponseDto chatOllama(@RequestParam String question) {
+        ChatResponse response =  ollamaClient
+                .prompt()
+                .user(question)
                 .call()
                 .chatResponse();
 

@@ -8,10 +8,10 @@ public record UpcomingAlbum(
         String album_title,
         //ReleaseDateInfo releaseDate,
         LocalDate release_date,
-        MusicSource source,
+        //MusicSource source,
         ReleaseAssessment assessment
 ) {
     public static UpcomingAlbum empty(String artist) {
-        return new UpcomingAlbum(artist, false, null, null, null, ReleaseAssessment.CONFIRMED);
+        return new UpcomingAlbum(artist, false, null, null, ReleaseAssessment.CONFIRMED);
     }
 }

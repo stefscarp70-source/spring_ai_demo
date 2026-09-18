@@ -9,6 +9,7 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,7 +31,7 @@ public class EmbeddingController {
     private final StarWarsVectorStoreService service;
     private final RestClient adminClient;
 
-    public EmbeddingController(EmbeddingModel model, VectorStore store, StarWarsVectorStoreService service, RestClient.Builder restClientBuilder) {
+    public EmbeddingController(@Qualifier("openAiEmbeddingModel") EmbeddingModel model, VectorStore store, StarWarsVectorStoreService service, RestClient.Builder restClientBuilder) {
         this.model = model;
         this.store = store;
         this.service = service;

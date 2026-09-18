@@ -43,13 +43,15 @@ public class MusicTools {
             UpcomingAlbumRequest request
     ) {
         log.info("      Tool findRecentAlbum: request: {}", request);
+        if (request==null) return RecentAlbumResponse.warn("Invalid null request as input argument");
+
         UpcomingAlbum album = musicResearchService.webSearch(request.artist(), request.monthsBefore(), request.monthsAhead());
         if (!album.yes()) {
-            return new RecentAlbumResponse(album, null, StatusSearch.EMPTY);
+            return new RecentAlbumResponse(album, null, StatusSearch.EMPTY, "No album found");
         } else if (album==null) {
-            return new RecentAlbumResponse(album, null, StatusSearch.ERROR);
+            return RecentAlbumResponse.error("No album found");
         } else {
-            return new RecentAlbumResponse(album, null, StatusSearch.SUCCESS);
+            return new RecentAlbumResponse(album, null, StatusSearch.SUCCESS, null);
 
         }
     }
@@ -57,19 +59,22 @@ public class MusicTools {
     @Tool(
             name = "getAlbumDetails",
             description = """
-            Finds the complete track list of a specific album title of an artist.
+            Finds the complete track list of a specific album of an artist.
             
             status field can be SUCCESS, meaning album found with track list, EMPTY, meaning no album found, or ERROR.
             """
     )
     public RecentAlbumResponse getAlbumDetails(UpcomingAlbum album) {
+        if (album==null) return RecentAlbumResponse.warn("Invalid null album as input argument");
+        if (album.album_title()==null) return RecentAlbumResponse.error("album title is missing, the search MUST terminate with no album found");
+
         AlbumDetails details = musicResearchService.detailsSearch(album.artist(), album.album_title());
         if (details.track_list().isEmpty()) {
-            return new RecentAlbumResponse(album, details, StatusSearch.EMPTY);
+            return new RecentAlbumResponse(album, details, StatusSearch.EMPTY, "track list empty for album "+album.album_title());
         } else if (details==null) {
-            return new RecentAlbumResponse(album, details, StatusSearch.ERROR);
+            return RecentAlbumResponse.error("No track list found for album "+album.album_title());
         } else {
-            return new RecentAlbumResponse(album, details, StatusSearch.SUCCESS);
+            return new RecentAlbumResponse(album, details, StatusSearch.SUCCESS, null);
 
         }
     }
