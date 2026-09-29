@@ -1,9 +1,13 @@
 package com.example.spring_ai_demo.model;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.relational.core.mapping.Table;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
+//import org.springframework.data.annotation.Id;
+import jakarta.persistence.Id;
+//import org.springframework.data.relational.core.mapping.Table;
 
-@Table("star_wars_character")
+@Table(name="star_wars_character")
+@Entity
 public record StarWarsCharacter (
     @Id
     Long id,

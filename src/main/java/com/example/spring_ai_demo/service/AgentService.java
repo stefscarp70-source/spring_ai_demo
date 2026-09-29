@@ -1,5 +1,9 @@
 package com.example.spring_ai_demo.service;
 
+import com.example.spring_ai_demo.tool.AgentSessionStore;
+import com.example.spring_ai_demo.tool.cooking.KitchenTools;
+import com.example.spring_ai_demo.tool.cooking.OllamaModelEnum;
+import com.example.spring_ai_demo.tool.cooking.dto.ChefResult;
 import com.example.spring_ai_demo.tool.songs.MusicTools;
 import com.example.spring_ai_demo.tool.songs.dto.AgentAnswer;
 import com.example.spring_ai_demo.tool.songs.dto.RecentAlbumResponse;
@@ -26,30 +30,427 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Service
 public class AgentService {
 
     private static final int MAX_STEPS = 5;
+    private final KitchenTools kitchenTools;
     private final MusicTools musicTools;
     private final ChatClient researchChatClient;
+    private final ChatClient gptChatClient;
     private final OllamaChatModel ollamaChatModel;
     private final ToolCallingManager toolCallingManager;
     private final BeanOutputConverter<AgentAnswer> answerConverter;
     private final BeanOutputConverter<RecentAlbumResponse> albumConverter;
 
-    public AgentService(MusicTools musicTools, ChatClient researchChatClient, ChatClient ollamaChatClient, OllamaChatModel ollamaChatModel,
-                        ToolCallingManager toolCallingManager) {
+    private final AgentSessionStore store;
+
+    public AgentService(MusicTools musicTools, KitchenTools kitchenTools, ChatClient ollamaChatClient, ChatClient gptChatClient, OllamaChatModel ollamaChatModel,
+                        ToolCallingManager toolCallingManager, AgentSessionStore store) {
+        this.kitchenTools = kitchenTools;
         this.musicTools = musicTools;
-        //this.researchChatClient = researchChatClient; //This for openAI agent
         this.researchChatClient = ollamaChatClient; //This for ollama agent
+        this.gptChatClient = gptChatClient;
         this.ollamaChatModel = ollamaChatModel;
         this.toolCallingManager = toolCallingManager;
+        this.store = store;
         this.albumConverter = new BeanOutputConverter<>(RecentAlbumResponse.class);
         this.answerConverter = new BeanOutputConverter<>(AgentAnswer.class);
     }
+
+    /**
+     * Version with just 2 tools and 2 models Ollama
+     * @param query
+     * @param model
+     * @return
+     */
+    public String runOllamaChef_rev0(String query, OllamaModelEnum model) {
+        String contextNoTool = String.format("""
+                You are a chef agent working in a kitchen and preparing recipes.
+                  Your task now is %s
     
+                  consider that every recipe must have ingredients available in the fridge
+                  so proceed without using your knowledge and consider ONLY the tools available. 
+                  So every step you must 
+                  - either use a proper tool with the correct input JSON arguments
+                  - or terminate with success or error;
+                  Only one tool at a time. Do not make the whole planning.
+                  Do not try to complete the entire task, and do not plan subsequent actions.
+                """, query);
+        String context0 = String.format("""
+                You are a chef agent working in a kitchen and preparing recipes and checking the fridge.
+                  Your task now is %s
+    
+                  So every step evaluate the task deciding 
+                  whether to use a proper tool with the correct input JSON arguments.
+                """, query);
+        String context1 = String.format(""" 
+                You are a chef agent.
+                
+                Your task is: %s
+                
+                Choose the next action needed to complete the task.
+                
+                If a tool is needed, call exactly ONE tool.
+                Do not describe the tool call.
+                Do not output JSON representing a tool call.
+                Use the tool calling mechanism directly.
+                """, query); //chiama solo 1 tool, no multi-step! - no addContext
+        String context2 = String.format(""" 
+                You are a chef agent working in a kitchen.
+                
+                Your task is: %s
+
+                You have access to tools that can provide information or perform actions
+                needed to complete the task.
+
+                At each step, evaluate the original task together with the information
+                already available.
+
+                If the task is complete, do not call another tool.
+                Otherwise, choose the most appropriate next tool and call it.
+                Call only one tool at a time.
+                """, query); //solo planning descrittivo
+
+        log.info("------------------------------------------");
+        log.info("-----  Model: {}", model.getModelName());
+        log.info("-----  New query to answer: {}", query);
+
+        final String toolSkip = "buyAtMarket";
+        ToolCallback[] tools = Arrays.stream(ToolCallbacks.from(kitchenTools))
+                .filter(to -> !toolSkip.equals(to.getToolDefinition().name()))
+                .toList().toArray(new ToolCallback[0]);
+
+        //Per Ollama
+        OllamaChatOptions chatOptionsOll = OllamaChatOptions.builder()
+                //.model("llama3.1:8b-instruct-q4_K_M")
+                //.model("qwen3:8b")
+                .model(model.getModelName())
+                .toolCallbacks(tools)
+                .temperature(0.0)
+                .build();
+
+        String contextPromp = context1;
+        log.debug("    context = {}", contextPromp);
+        Prompt prompt = new Prompt(
+                List.of(new UserMessage(contextPromp)),
+                chatOptionsOll //Ollama
+        );
+
+        ChatResponse response = null;
+
+        /// /////////////////////////
+
+        long total = 0L;
+        int step;
+        String previousToolSignature = "";
+        for(step=1; step<=MAX_STEPS; step++) {
+            log.info("===== Agent step {} =========", step);
+
+            //log.debug("  Agent ChatClient = {}", researchChatClient);
+            //log.info("  Ollama options model = {}", chatOptionsOll.getModel());
+            //Arrays.stream(tools).sequential().forEach(tool ->
+              //      log.debug("  >> REGISTERED TOOL: {}",
+                //            tool.getToolDefinition().name()));
+
+            //1. LLM must decide next action according to prompt
+
+            response = researchChatClient
+                    .prompt(prompt) //Ollama
+                    .advisors(AdvisorParams.toolCallingAdvisorAutoRegister(false))
+                    .call()
+                    .chatResponse();
+
+            if (response == null) {
+                log.info(" ");
+                //return RunResult.error("Error: Agent returned no response", step);
+                return "Error: Agent returned no response";
+            }
+
+            // 2. if not tool call -> final answer
+            if (!response.hasToolCalls()) {
+                log.info(" ");
+                total += response.getMetadata().getUsage().getTotalTokens();
+                log.info("FINAL response: {}", response.getResult().getOutput().getText());
+                //return RunResult.response(response, step, answerConverter, total);
+                return response.getResult().getOutput().getText();
+            }
+            log.info("  1. No final response, go on with next tool...");
+
+            //Check whether the last 2 tool calls are identical
+            boolean toolDuplication = false;
+            boolean istools = !response.getResult().getOutput().getToolCalls().isEmpty();
+            if (istools) {
+                String toolName = response.getResult().getOutput().getToolCalls().get(0).name();
+                String toolArgs = response.getResult().getOutput().getToolCalls().get(0).arguments();
+                log.debug("    Tool calling {}", toolName);
+                log.debug("            >>  {}", toolArgs);
+                String toolSignature = toolName+">>"+toolArgs;
+                if (toolSignature.equals(previousToolSignature)) {
+                    toolDuplication = true;
+                    log.warn("Tool call DUPLICATAED! ({}) >> forcing STOP...", toolName);
+                } else {
+                    previousToolSignature = toolSignature;
+                }
+            }
+            //log.debug("    Text content: {}", response.getResult().getOutput().getText());
+            //log.info("  Agent response: {}", response);
+
+            // 3. run next tool
+            List<Message> history = prompt.getInstructions(); //if duplicated, not using the one from the tool
+            if (!toolDuplication) {
+                ToolExecutionResult result = toolCallingManager.executeToolCalls(
+                        prompt, response
+                );
+                //log.info("  result after tool: {}", result);
+                history = new ArrayList<>(result.conversationHistory());
+
+                total += response.getMetadata().getUsage().getTotalTokens();
+                log.info("  2. Tool executed (total: {})...", total);
+
+                try {
+                    Message lastMessage = result.conversationHistory().get(result.conversationHistory().size() - 1);
+                    if (lastMessage instanceof ToolResponseMessage toolResponseMessage) {
+
+                        List<ToolResponseMessage.ToolResponse> responses = toolResponseMessage.getResponses();
+                        ToolResponseMessage.ToolResponse lastResponse = responses.get(responses.size() - 1);
+
+                        String responseData = lastResponse.responseData();
+                        // deserializza responseData
+                        log.debug("    raw from tool: {}", responseData);
+                    }
+                } catch (Exception e) {
+                    log.warn("  ...no possible final answer: {}", e.getMessage());
+                }
+            }
+
+
+            String addContext = """
+                    Evaluate ONLY the result of the last tool.                    
+                    If the last tool returned errorMessage != null: STOP. Do not call any tool.
+                
+                    Otherwise: decide the next tool required by the original request.
+                
+                    Never call a tool again after an error result.
+                """;
+            String addContext1 = """
+                    Evaluate whether the task with the tool result is enough for task completion or another tool is needed.
+                    """; //2 step ok, ma poi non termina e replica il secondo tool
+
+            if (toolDuplication) {
+                history.add(new UserMessage("""
+                       STOP.
+                        
+                       This tool has already been called with exactly the same arguments.
+                       Do not call any tool again.
+            
+                       The agent must now terminate.
+                       Do not output a tool name, tool call, JSON, or action.
+            
+                       Instead, answer the ORIGINAL USER REQUEST directly using the information
+                       already obtained from the previous tool results.
+            
+                       Explain clearly:
+                       - what was found
+                       - whether the original request can be completed
+                       - if not, why it cannot be completed
+                    """));
+            } else {
+                history.add(new UserMessage(addContext1));
+            }
+
+            // 4. add ToolResponseMessage and go on with the loop
+            log.info("  3. Tool, response added, another iteration...");
+
+            prompt = new Prompt(history, chatOptionsOll);
+            /*prompt.getInstructions().forEach(message ->
+                    log.debug("    MESSAGE {}: {}", message.getMessageType(), message)
+            );*/
+
+        }
+
+        log.warn("ERROR: Agent resoning completed with too many steps.");
+        return "Error, too many STEPS > "+MAX_STEPS;
+    }
+
+    /**
+     * Version with also the 3rd tool about the market
+     * @param query
+     * @param model
+     * @return
+     */
+    public ChefResult runOllamaChef(String query, OllamaModelEnum model) {
+        String sessionId = UUID.randomUUID().toString();
+
+        String context0 = String.format(""" 
+                You are a chef agent.
+                
+                Your task is: %s
+                
+                Choose the next action needed to complete the task.
+                
+                If a tool is needed, call exactly ONE tool.
+                Do not describe the tool call.
+                Do not output JSON representing a tool call.
+                Use the tool calling mechanism directly.
+                """, query); //chiama solo 1 tool, no multi-step! - no addContext
+
+        log.info("------------------------------------------");
+        log.info("-----  Model: {}, session: {}", model.getModelName(), sessionId);
+        log.info("-----  New query to answer: {}", query);
+
+        ToolCallback[] tools = ToolCallbacks.from(kitchenTools);
+
+        //Per Ollama
+        OllamaChatOptions chatOptionsOll = OllamaChatOptions.builder()
+                .model(model.getModelName())
+                .toolCallbacks(tools)
+                .temperature(0.0)
+                .build();
+        //GTP
+        ToolCallingChatOptions chatOptions = ToolCallingChatOptions.builder()
+                .toolCallbacks(tools)
+                .build();
+
+        String contextPromp = context0;
+        //log.debug("    context = {}", contextPromp);
+        Prompt prompt = new Prompt(
+                List.of(new UserMessage(contextPromp)),
+                chatOptionsOll //Ollama
+        );
+
+        ChatResponse response = null;
+
+        /// /////////////////////////
+
+        long total = 0L;
+        int step;
+        String previousToolSignature = "";
+        for(step=1; step<=MAX_STEPS+2; step++) {
+            log.info("===== Agent step {} =========", step);
+
+            if (model==OllamaModelEnum.GPT) {
+                response = gptChatClient
+                        .prompt()
+                        .messages(prompt.getInstructions())  //openAI
+                        .options(chatOptions.mutate()) //openAI
+                        .advisors(AdvisorParams.toolCallingAdvisorAutoRegister(false))
+                        .call()
+                        .chatResponse();
+            } else {
+                response = researchChatClient
+                        .prompt(prompt) //Ollama
+                        .advisors(AdvisorParams.toolCallingAdvisorAutoRegister(false))
+                        .call()
+                        .chatResponse();
+            }
+
+            // 2. if not tool call -> final answer
+            if (!response.hasToolCalls()) {
+                log.info(" ");
+                total += response.getMetadata().getUsage().getTotalTokens();
+                log.info("FINAL response: {}", response.getResult().getOutput().getText());
+                return ChefResult.simpleResponse(response, step, total, store.get(sessionId));
+                //return response.getResult().getOutput().getText();
+            }
+            log.info("  1. No final response, go on with next tool...");
+
+            //Check whether the last 2 tool calls are identical
+            boolean toolDuplication = false;
+            boolean istools = !response.getResult().getOutput().getToolCalls().isEmpty();
+            if (istools) {
+                String toolName = response.getResult().getOutput().getToolCalls().get(0).name();
+                String toolArgs = response.getResult().getOutput().getToolCalls().get(0).arguments();
+                log.debug("    Tool calling {}", toolName);
+                log.debug("            >>  {}", toolArgs);
+                String toolSignature = toolName+">>"+toolArgs;
+                if (toolSignature.equals(previousToolSignature)) {
+                    toolDuplication = true;
+                    log.warn("Tool call DUPLICATAED! ({}) >> forcing STOP...", toolName);
+                } else {
+                    previousToolSignature = toolSignature;
+                }
+
+                if (!toolDuplication) {
+                    store.add(sessionId, toolName, kitchenTools.extractArgsFromTools(toolName, toolArgs));
+                }
+            }
+
+            // 3. run next tool
+            List<Message> history = prompt.getInstructions(); //if duplicated, not using the one from the tool
+            if (!toolDuplication) {
+                ToolExecutionResult result = toolCallingManager.executeToolCalls(
+                        prompt, response
+                );
+                //log.info("  result after tool: {}", result);
+                history = new ArrayList<>(result.conversationHistory());
+
+                total += response.getMetadata().getUsage().getTotalTokens();
+                log.info("  2. Tool executed (total: {})...", total);
+
+                try {
+                    Message lastMessage = result.conversationHistory().get(result.conversationHistory().size() - 1);
+                    if (lastMessage instanceof ToolResponseMessage toolResponseMessage) {
+
+                        List<ToolResponseMessage.ToolResponse> responses = toolResponseMessage.getResponses();
+                        ToolResponseMessage.ToolResponse lastResponse = responses.get(responses.size() - 1);
+
+                        String responseData = lastResponse.responseData();
+                        // deserializza responseData
+                        log.debug("    raw from tool: {}", responseData);
+
+                        //store.add(sessionId, lastResponse.name(), responseData);
+                    }
+                } catch (Exception e) {
+                    log.warn("  ...no possible final answer: {}", e.getMessage());
+                }
+            }
+
+            String addContext1 = """
+                    Evaluate whether the task with the tool result is enough for task completion or another tool is needed.
+                    """; //2 step ok, ma poi non termina e replica il secondo tool
+
+            if (toolDuplication) {
+                history.add(new UserMessage("""
+                       STOP.
+                        
+                       This tool has already been called with exactly the same arguments.
+                       Do not call any tool again.
+            
+                       The agent must now terminate.
+                       Do not output a tool name, tool call, JSON, or action.
+            
+                       Instead, answer the ORIGINAL USER REQUEST directly using the information
+                       already obtained from the previous tool results.
+            
+                       Explain clearly:
+                       - what was found
+                       - whether the original request can be completed
+                       - if not, why it cannot be completed
+                    """));
+            } else {
+                history.add(new UserMessage(addContext1));
+            }
+
+            // 4. add ToolResponseMessage and go on with the loop
+            log.info("  3. Tool, response added, another iteration...");
+
+            prompt = new Prompt(history, chatOptionsOll);
+            /*prompt.getInstructions().forEach(message ->
+                    log.debug("    MESSAGE {}: {}", message.getMessageType(), message)
+            );*/
+
+        }
+
+        log.warn("ERROR: Agent resoning completed with too many steps.");
+        //return "Error, too many STEPS > "+MAX_STEPS;
+        return ChefResult.error("Error, too many STEPS", MAX_STEPS);
+    }
+
+
     public RunResult runOllama(String artist) {
         String context = String.format("""
                 Find whether %s has released or is about to release an album and give me its complete tracklist

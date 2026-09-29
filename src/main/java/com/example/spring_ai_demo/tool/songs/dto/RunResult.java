@@ -8,6 +8,7 @@ import java.util.Collections;
 public record RunResult(
         String status,
         AgentAnswer answer,
+        String simpleAnswer,
         int steps,
         long promptTokens,
         long completionTokens,
@@ -16,7 +17,7 @@ public record RunResult(
     public static RunResult budgetExceeded(int maxSteps, long total) {
         String error = "Exceeded max steps";
         AgentAnswer answer = new AgentAnswer(error, null, null, Collections.emptyList());
-        return new RunResult(error, answer, maxSteps, 0, 0, total);
+        return new RunResult(error, answer, error, maxSteps, 0, 0, total);
     }
 
     public static RunResult error(String error, int steps) {
@@ -24,14 +25,21 @@ public record RunResult(
                 null,
                 null,
                 Collections.emptyList());
-        return new RunResult(error,  agentAnswer, steps, 0, 0, 0);
+        return new RunResult(error,  agentAnswer, null, steps, 0, 0, 0);
     }
 
     public static RunResult response(ChatResponse response, int steps, BeanOutputConverter<AgentAnswer>converter, long total) {
         String rawResponse = response.getResult().getOutput().getText();
         AgentAnswer agentAnswer = converter.convert(rawResponse);
         return new RunResult("SUCCESS",
-            agentAnswer,
+            agentAnswer, rawResponse,
+                steps, 0, 0, total);
+    }
+
+    public static RunResult simpleResponse(ChatResponse response, int steps, long total) {
+        String rawResponse = response.getResult().getOutput().getText();
+        return new RunResult("SUCCESS",
+                null, rawResponse,
                 steps, 0, 0, total);
     }
 
@@ -41,7 +49,7 @@ public record RunResult(
                 response.album().release_date(),
                 response.album_details().track_list());
         return new RunResult("SUCCESS",
-                agentAnswer,
+                agentAnswer, "",
                 steps, 0, 0, total);
     }
 }

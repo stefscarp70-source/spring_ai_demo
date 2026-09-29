@@ -3,6 +3,7 @@ package com.example.spring_ai_demo.controller;
 import com.example.spring_ai_demo.StarWarsCharacterRepository;
 import com.example.spring_ai_demo.dto.ChatResponseDto;
 import com.example.spring_ai_demo.model.StarWarsCharacter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Collections;
 import java.util.List;
 
+@Slf4j
 @RestController
 public class ChatController {
 
@@ -53,6 +55,7 @@ public class ChatController {
 
     @GetMapping("/api/ollama")
     public ChatResponseDto chatOllama(@RequestParam String question) {
+        log.info("Querying Ollama...");
         ChatResponse response =  ollamaClient
                 .prompt()
                 .user(question)
@@ -60,6 +63,7 @@ public class ChatController {
                 .chatResponse();
 
         Usage usage = response.getMetadata().getUsage();
+        log.info("  >> token: {}", usage.getTotalTokens());
 
         return new ChatResponseDto(
                 response.getResult().getOutput().getText(),

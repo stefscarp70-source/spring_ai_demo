@@ -17,6 +17,11 @@ public class AiConfig {
     }
 
     @Bean
+    public ChatClient gptChatClient(OpenAiChatModel model) {
+        return ChatClient.builder(model).build();
+    }
+
+    @Bean
     ChatClient chatClient(OpenAiChatModel openAiChatModel) {
         return ChatClient.builder(openAiChatModel)
                 .defaultSystem("""

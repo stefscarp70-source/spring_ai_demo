@@ -3,6 +3,8 @@ package com.example.spring_ai_demo.controller;
 import com.example.spring_ai_demo.service.AgentService;
 import com.example.spring_ai_demo.service.MusicResearchService;
 import com.example.spring_ai_demo.service.WebsearchService;
+import com.example.spring_ai_demo.tool.cooking.OllamaModelEnum;
+import com.example.spring_ai_demo.tool.cooking.dto.ChefResult;
 import com.example.spring_ai_demo.tool.songs.MusicTools;
 import com.example.spring_ai_demo.tool.songs.dto.AlbumDetails;
 import com.example.spring_ai_demo.tool.songs.dto.RunResult;
@@ -11,7 +13,6 @@ import com.example.spring_ai_demo.tool.songs.dto.UpcomingAlbum;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @Slf4j
@@ -27,6 +28,7 @@ public class AgentController {
         this.websearchService = websearchService;
         this.agentService = agentService;
     }
+
 
     @GetMapping("/tav/search")
     public TavilySearchResponse tavSearch(@RequestParam String artist) {
@@ -58,6 +60,20 @@ public class AgentController {
 
         return agentService.runOllama(artist);
 
+    }
+
+    //Run agentico principale: chef demo
+    @GetMapping("/agent/llama/chef")
+    public ChefResult agentChef(@RequestParam String q) {
+
+        return agentService.runOllamaChef(q, OllamaModelEnum.LLAMA);
+
+    }
+
+    @GetMapping("/agent/qwen/chef")
+    public ChefResult agentChefQwen(@RequestParam String q, @RequestParam String model) {
+        OllamaModelEnum mod = OllamaModelEnum.valueOf(model);
+        return agentService.runOllamaChef(q, mod);
     }
 
     @GetMapping("/agent/test")
