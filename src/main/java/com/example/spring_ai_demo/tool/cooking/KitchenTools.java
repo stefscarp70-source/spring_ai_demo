@@ -24,11 +24,7 @@ import java.util.Optional;
 @Component
 public class KitchenTools {
 
-    //Recipe carbonara
-    public final static String PENNE = "penne";
-    public final static String CHEESE = "cheese";
-    public final static String UOVA = "uova";
-    public final static String GUANCIALE = "guanciale";
+
 
     private final static String BUYMARKET = "buyAtMarket";
     private final static String TAKEFRIDGE = "findFridgeMissingIngredients";
@@ -47,7 +43,7 @@ public class KitchenTools {
     @Tool( name = TAKEFRIDGE,
             description= """
             Searches in my fridge whether all the ingredients in the list provided
-            are available. 
+            are available.
             
             The input parameter 'list' must be a JSON array of Ingredient objects, not a string containing JSON.
                     Each Ingredient contains:
@@ -157,7 +153,7 @@ public class KitchenTools {
 
     @Tool( name = BUYMARKET,
             description= """
-            Buy at market the missing ingredients in order to have all is required. 
+            Buy at market the missing ingredients in order to have all is required.
             It returns the market bag with the ingredient list of what you bought
             and the total_price spent.       
             """)

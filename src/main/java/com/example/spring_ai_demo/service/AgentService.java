@@ -229,7 +229,7 @@ public class AgentService {
 
 
             String addContext = """
-                    Evaluate ONLY the result of the last tool.                    
+                    Evaluate ONLY the result of the last tool.
                     If the last tool returned errorMessage != null: STOP. Do not call any tool.
                 
                     Otherwise: decide the next tool required by the original request.
@@ -243,7 +243,7 @@ public class AgentService {
             if (toolDuplication) {
                 history.add(new UserMessage("""
                        STOP.
-                        
+                    
                        This tool has already been called with exactly the same arguments.
                        Do not call any tool again.
             
@@ -704,7 +704,7 @@ public class AgentService {
                 chatOptions //openAI
         );
 
-        ChatResponse response = null;
+        ChatResponse response;
 
         long total = 0L;
         int step;
@@ -757,34 +757,6 @@ public class AgentService {
 
 
         return RunResult.budgetExceeded(MAX_STEPS, total);
-    }
-
-    public void testOllamaToolCalling() {
-        ToolCallback[] tools = ToolCallbacks.from(musicTools);
-        OllamaChatOptions options = OllamaChatOptions.builder()
-                .model("llama3.1:8b-instruct-q4_K_M")
-                .toolCallbacks(tools)
-                .temperature(0.0)
-                .build();
-
-        Prompt prompt = new Prompt(
-                """
-                        Devi trovare un album recente o in uscita di Madonna.
-                                    Per farlo devi utilizzare il tool findRecentAlbum.
-                                    Non rispondere usando le tue conoscenze: chiama il tool.
-                        """,
-                options
-        );
-
-        ChatResponse response = ollamaChatModel.call(prompt);
-
-        log.info("RAW RESPONSE: {}", response);
-        log.info("TOOL CALLS: {}", response.getResult()
-                .getOutput()
-                .getToolCalls());
-        log.info("TEXT: {}", response.getResult()
-                .getOutput()
-                .getText());
     }
 
     public void testOllamaToolCalling2() {
