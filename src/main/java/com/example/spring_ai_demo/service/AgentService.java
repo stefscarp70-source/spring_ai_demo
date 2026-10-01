@@ -297,6 +297,13 @@ public class AgentService {
                 Do not output JSON representing a tool call.
                 Use the tool calling mechanism directly.
                 """, query); //chiama solo 1 tool, no multi-step! - no addContext
+        String contextLLama3 = String.format(""" 
+                You are a chef agent working in a kitchen.
+                
+                Your task is: %s
+
+                Consider your tools and use the one for the task.
+                """, query);
 
         log.info("------------------------------------------");
         log.info("-----  Model: {}, session: {}", model.getModelName(), sessionId);
@@ -310,12 +317,13 @@ public class AgentService {
                 .toolCallbacks(tools)
                 .temperature(0.0)
                 .build();
-        //GTP
+        //GPT
         ToolCallingChatOptions chatOptions = ToolCallingChatOptions.builder()
                 .toolCallbacks(tools)
                 .build();
 
         String contextPromp = context0;
+        if (model==OllamaModelEnum.LLAMA3) contextPromp = contextLLama3;
         //log.debug("    context = {}", contextPromp);
         Prompt prompt = new Prompt(
                 List.of(new UserMessage(contextPromp)),

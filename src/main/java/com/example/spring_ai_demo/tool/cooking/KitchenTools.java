@@ -49,7 +49,7 @@ public class KitchenTools {
             Searches in my fridge whether all the ingredients in the list provided
             are available. 
             
-            The input parameter 'list' must be a JSON array of Ingredient objects.
+            The input parameter 'list' must be a JSON array of Ingredient objects, not a string containing JSON.
                     Each Ingredient contains:
                     - name: ingredient name
                     - quantity: required quantity
@@ -214,7 +214,7 @@ public class KitchenTools {
             Ingredient restocking = opIngredient.get();
             restocking.extract(dto.quantity());
             fridgeRepository.save(restocking);
-            log.info("    extracting from {} >> {}.", dto.name(), dto.quantity());
+            log.info("    extracting {} >> {}.", dto.name(), dto.quantity());
         }
 
     }
@@ -233,7 +233,7 @@ public class KitchenTools {
             Ingredient restocking = opIngredient.orElseGet(() -> Ingredient.fromScratch(dto));
             restocking.restock(dto.quantity());
             fridgeRepository.save(restocking);
-            log.info("    restocking {}.", dto.name());
+            log.info("    restocking {} >> {}.", dto.name(), dto.quantity());
         }
 
     }

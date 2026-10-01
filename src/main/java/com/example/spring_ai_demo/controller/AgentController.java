@@ -66,7 +66,7 @@ public class AgentController {
     @GetMapping("/agent/llama/chef")
     public ChefResult agentChef(@RequestParam String q) {
 
-        return agentService.runOllamaChef(q, OllamaModelEnum.LLAMA);
+        return agentService.runOllamaChef(q, OllamaModelEnum.LLAMA3);
 
     }
 
