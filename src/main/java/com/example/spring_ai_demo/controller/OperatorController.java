@@ -2,6 +2,7 @@ package com.example.spring_ai_demo.controller;
 
 import com.example.spring_ai_demo.tool.cooking.KitchenTools;
 import com.example.spring_ai_demo.tool.cooking.dto.IngredientDto;
+import com.example.spring_ai_demo.tool.cooking.dto.RecipeIngredients;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -64,6 +65,15 @@ public class OperatorController {
                 .status(HttpStatus.OK)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(tools.getFromRecipe(name, npeople));
+    }
+
+    @GetMapping("/recipes")
+    public ResponseEntity<List<RecipeIngredients>> recipeList() {
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(tools.getAllRecipes());
     }
 
 

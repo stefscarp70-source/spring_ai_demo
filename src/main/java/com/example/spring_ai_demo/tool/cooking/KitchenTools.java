@@ -18,7 +18,9 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -114,6 +116,31 @@ public class KitchenTools {
                 .map(ing -> IngredientDto.fromRecipeDB(ing, npeople))
                 .toList();
     }
+
+    public List<RecipeIngredients> getAllRecipes() {
+
+        Map<String, List<Recipe>> recipes0 = recipeRepository.findAll()
+                .stream()
+                .collect(Collectors.groupingBy(Recipe::getName));
+        Map<String, List<IngredientDto>> recipes = recipeRepository.findAll()
+                .stream()
+                .collect(Collectors.groupingBy(
+                        Recipe::getName,
+                        Collectors.mapping(
+                                r -> new IngredientDto(
+                                        r.getIngredient(),
+                                        r.getQ(),
+                                        r.getUnit()
+                                ),
+                                Collectors.toList()
+                        )
+                ));
+        return recipes.entrySet()
+                .stream()
+                .map(entry -> RecipeIngredients.oklist(entry.getKey(), entry.getValue()))
+                .toList();
+    }
+
 
     @Tool( name = "getRecipeIngredients",
             description= """
